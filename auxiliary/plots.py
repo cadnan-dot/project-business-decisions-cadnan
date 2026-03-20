@@ -1,389 +1,186 @@
 """Auxiliary functions for plotting which are used in the main notebook."""
-
-import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+import joblib
 
 
-def plot_RDD_curve(df, running_variable, outcome, cutoff):
-    """Plot RDD curves.
+def get_ate_w_ci(foc_data, y, t, z=1.96):
+    """
+    Calculates the Average Treatment Effect (ATE) with Confidence Intervals (CI).
 
-    Function splits dataset into treated and untreated group based on running variable
-    and plots outcome (group below cutoff is treated, group above cutoff is untreated).
-
-    Args:
-    -------
-        df(DataFrame): Dataframe containing the data to be plotted.
-        running_variable(column): DataFrame column name of the running variable.
-        outome(column): DataFrame column name of the outcome variable.
-        cutoff(numeric): Value of cutoff.
+    Parameters:
+    foc_data (pd.DataFrame): Data containing outcome and treatment columns.
+    y (str): Column name for the outcome variable.
+    t (str): Column name for the treatment variable.
+    z (float): Z-score for confidence interval calculation. Default is 1.96 for 95% CI.
 
     Returns:
-    ---------
-        matplotlib.pyplpt.plot
+    tuple: Coefficient, standard error, and confidence interval lower and upper bounds.
     """
-    plt.grid(True)
-    df_treat = df[df[running_variable] < cutoff]
-    df_untreat = df[df[running_variable] >= cutoff]
-    plt.plot(df_treat[outcome])
-    plt.plot(df_untreat[outcome])
+    t_coeff = (np.sum((foc_data[t] - foc_data[t].mean()) * (foc_data[y] - foc_data[y].mean())) /
+               np.sum((foc_data[t] - foc_data[t].mean()) ** 2))
 
-    return
+    n = foc_data.shape[0]
+    t_bar = foc_data[t].mean()
+    beta1 = t_coeff
+    beta0 = foc_data[y].mean() - beta1 * t_bar
+    e = foc_data[y] - (beta0 + beta1 * foc_data[t])
+    se = np.sqrt(((1 / (n - 2)) * np.sum(e ** 2)) / np.sum((foc_data[t] - t_bar) ** 2))
+    t_ci = np.array([beta1 - z * se, beta1 + z * se])
+
+    return t_coeff, se, t_ci[0], t_ci[1]
 
 
-def plot_RDD_curve_colored(df, running_variable, outcome, cutoff, color):
-    """Plot RDD curves.
+def plot_gate(est, x_test, y_test, t_test):
+    """
+    Plots the Group Average Treatment Effect (GATE) based on the model's effect estimates.
 
-    Function splits dataset into treated and untreated group based on running variable
-    and plots outcome (group below cutoff is treated, group above cutoff is untreated).
-
-    Args:
-    -------
-        df(DataFrame): Dataframe containing the data to be plotted.
-        running_variable(column): DataFrame column name of the running variable.
-        outome(column): DataFrame column name of the outcome variable.
-        cutoff(numeric): Value of cutoff.
+    Parameters:
+    est (CausalForestDML): Trained Causal Forest DML model.
+    x_test (pd.DataFrame): DataFrame containing the test predictors.
+    y_test (pd.Series): Series containing the test outcomes.
+    t_test (pd.Series): Series containing the test treatments.
 
     Returns:
-    ---------
-        matplotlib.pyplpt.plot
-
+    None: Saves the GATE plot as a PDF file.
     """
-    plt.grid(True)
-    df_treat = df[df[running_variable] < cutoff]
-    df_untreat = df[df[running_variable] >= cutoff]
-    plt.plot(df_treat[outcome], color=color, label="_nolegend_")
-    plt.plot(df_untreat[outcome], color=color, label="_nolegend_")
+    effects = est.effect_inference(x_test).summary_frame()
+    testing_frame = pd.DataFrame({'y': y_test, 't': t_test})
+    testing_frame['effect'] = effects['point_estimate']
+    testing_frame['treat_policy'] = np.where(testing_frame['effect'] < 0, 1, 0)
+    print(np.sum(testing_frame['treat_policy']))
+    print(np.sum(len(testing_frame)))
 
+    # Calculate ATE with confidence intervals for groups
+    ate_pi_1 = get_ate_w_ci(testing_frame[testing_frame.treat_policy == 1], y="y", t="t")
+    ate_pi_0 = get_ate_w_ci(testing_frame[testing_frame.treat_policy == 0], y="y", t="t")
 
-def plot_RDD_curve_CI(
-    df, running_variable, outcome, cutoff, lbound, ubound, CI_color, linecolor
-):
-    """Plot RDD curves with confidence intervals.
-
-    Function splits dataset into treated and untreated group based on running variable
-    and plots outcome (group below cutoff is treated, group above cutoff is untreated).
-
-    Args:
-    ------
-        df(DataFrame): Dataframe containing the data to be plotted.
-        running_variable(column): DataFrame column name of the running variable.
-        outome(column): DataFrame column name of the outcome variable.
-        cutoff(numeric): Value of cutoff.
-        lbound(column): Lower bound of confidence interval.
-        ubound(column): Upper bound of confidence interval.
-
-
-    Returns:
-    ----------
-        matplotlib.pyplpt.plot
-
-    """
-    plt.grid(True)
-    df_treat = df[df[running_variable] < cutoff]
-    df_untreat = df[df[running_variable] >= cutoff]
-
-    # Plot confidence Intervals.
-    plt.plot(df_treat[lbound], color=CI_color, alpha=0.3)
-    plt.plot(df_treat[ubound], color=CI_color, alpha=0.3)
-    plt.plot(df_untreat[lbound], color=CI_color, alpha=0.3)
-    plt.plot(df_untreat[ubound], color=CI_color, alpha=0.3)
-    plt.fill_between(
-        df_treat[running_variable],
-        y1=df_treat[lbound],
-        y2=df_treat[ubound],
-        facecolor=CI_color,
-        alpha=0.3,
-    )
-    plt.fill_between(
-        df_untreat[running_variable],
-        y1=df_untreat[lbound],
-        y2=df_untreat[ubound],
-        facecolor=CI_color,
-        alpha=0.3,
-    )
-
-    # Plot estimated lines.
-    plt.plot(df_untreat[outcome], color=linecolor, label="_nolegend_")
-    plt.plot(df_treat[outcome], color=linecolor, label="_nolegend_")
-
-
-def plot_hist_GPA(data):
-    """
-    Plot historgram showing the distribution of students according to distance
-    from fist year cutoff.
-    """
-    plt.xlim(-1.8, 3)
-    plt.ylim(0, 3500)
-    plt.xticks([-1.2, -0.6, 0, 0.6, 1.2, 1.8, 2.4, 3])
-    plt.hist(data["dist_from_cut"], bins=30, color="orange", alpha=0.7)
-    plt.axvline(x=-1.2, color="c", alpha=0.8)
-    plt.axvline(x=1.2, color="c", alpha=0.8)
-    plt.axvline(x=0.6, color="c", alpha=0.3)
-    plt.axvline(x=-0.6, color="c", alpha=0.3)
-    plt.axvline(x=0, color="r")
-    plt.fill_betweenx(y=range(3500), x1=-1.8, x2=-1.2, alpha=0.8, facecolor="c")
-    plt.fill_betweenx(y=range(3500), x1=-1.2, x2=-0.6, alpha=0.3, facecolor="c")
-    plt.fill_betweenx(y=range(3500), x1=1.2, x2=0.6, alpha=0.3, facecolor="c")
-    plt.fill_betweenx(y=range(3500), x1=3, x2=1.2, alpha=0.8, facecolor="c")
-    plt.xlabel("First year GPA minus probation cutoff")
-    plt.ylabel("Freq.")
-    plt.title("Distribution of student GPAs distance from the cutoff")
-
-
-def plot_covariates(data, descriptive_table, bins):
-    """
-    Plots covariates with bins of size 0.5 grade points.
-    """
-    plt.figure(figsize=(13, 10), dpi=70, facecolor="w", edgecolor="k")
-    plt.subplots_adjust(wspace=0.2, hspace=0.4)
-
-    for idx, var in enumerate(descriptive_table.index):
-        plt.subplot(3, 3, idx + 1)
-        plt.axvline(x=0, color="r")
-        plt.grid(True)
-        plt.plot(
-            data[var].groupby(data["dist_from_cut_med05"]).mean(),
-            "o",
-            color="c",
-            alpha=0.5,
-        )
-        plt.xlabel("Distance from cutoff")
-        plt.ylabel("Mean")
-        plt.title(descriptive_table.iloc[idx, 4])
-
-
-def plot_figure1(data, bins, pred):
-    """
-    Plots Figure 1.
-
-    Args:
-    ------
-        data(pd.DataFrame): Dataframe containing the frequency of each bin.
-        bins(list): List of bins.
-        pred(pd.DataFrame): Predicted frequency of each bin.
-
-    Returns:
-    ---------
-        matplotlib.pyplpt.plot
-    """
-    plt.xlim(-1.5, 1.5)
-    plt.ylim(0, 2100.5)
-    plt.axvline(x=0, color="r")
-    plt.xlabel("First year GPA minus probation cutoff")
-    plt.ylabel("Frequency count")
-    plt.plot(data.bins, data.freq, "o")
-    plot_RDD_curve(df=pred, running_variable="bins", outcome="prediction", cutoff=0)
-    plt.title("Figure 1. Distribution of Student Grades Relative to their Cutoff")
-
-
-def plot_figure2(data, pred):
-    """
-    Plots Figure 2.
-    """
-    plt.xlim(-1.5, 1.5)
-    plt.plot(data["dist_from_cut_med10"], data["gpalscutoff"], "o")
-    plot_RDD_curve(
-        df=pred, running_variable="dist_from_cut", outcome="prediction", cutoff=0
-    )
-    plt.axvline(x=0, color="r")
-    plt.title("Figure 2: Porbation Status at the end of first year")
-    plt.xlabel("First year GPA minus probation cutoff")
-    plt.ylabel("Probation Status")
-
-
-def plot_figure3(inputs_dict, outputs_dict, keys):
-    """Plot results from RD analysis for six subgroups of students in Figure3.
-
-    Args:
-    -------
-        inputs_dict(dict): Dictionary containing all dataframes for each subgroup, used
-        for plotting the bins (dots).
-        outputs_dict(dict): Dictionary containing the results from RD analysis for each
-        subgroup, used for plotting the lines.
-        keys(list): List of keys of the dictionaries, both dictionaries must have the
-        same keys.
-
-    Returns:
-    ----------
-        matplotlib.pyplpt.plot: Figure 3 from the paper (figure consists of 6 subplots,
-        one for each subgroup of students)
-    """
-    # Frame for entire figure.
-    plt.figure(figsize=(10, 13), dpi=70, facecolor="w", edgecolor="k")
-    plt.subplots_adjust(wspace=0.4, hspace=0.4)
-
-    # Remove dataframe 'All' because I only want to plot the results for the
-    # subgroups of students.
-    keys = keys.copy()
-    keys.remove("All")
-
-    # Create plots for all subgroups.
-    for idx, key in enumerate(keys):
-        # Define position of subplot.
-        plt.subplot(3, 2, idx + 1)
-        # Create frame for subplot.
-        plt.xlim(-1.5, 1.5)
-        plt.ylim(0, 0.22)
-        plt.axvline(x=0, color="r")
-        plt.xlabel("First year GPA minus probation cutoff")
-        plt.ylabel("Left university voluntarily")
-        # Calculate bin means.
-        bin_means = (
-            inputs_dict[key]
-            .left_school.groupby(inputs_dict[key]["dist_from_cut_med10"])
-            .mean()
-        )
-        bin_means = pd.Series.to_frame(bin_means)
-        # Plot subplot.
-        plt.plot(list(bin_means.index), list(bin_means.left_school), "o")
-        plot_RDD_curve(
-            df=outputs_dict[key],
-            running_variable="dist_from_cut",
-            outcome="prediction",
-            cutoff=0,
-        )
-        plt.title(key)
-
-
-def plot_figure4(data, pred):
-    """
-    Plots Figure 4.
-    """
-    plt.figure(figsize=(8, 5))
-    plt.xlim(-1.5, 1.5)
-    plt.ylim(-1, 1.5)
-    plt.axvline(x=0, color="r")
-    plt.xlabel("First year GPA minus probation cutoff")
-    plt.ylabel("Subsequent GPA minus Cutoff")
-    plt.plot(data.nextGPA.groupby(data["dist_from_cut_med10"]).mean(), "o")
-    plot_RDD_curve(
-        df=pred, running_variable="dist_from_cut", outcome="prediction", cutoff=0
-    )
-    plt.title("Figure 4 - GPA in the next enrolled term")
-
-
-def plot_figure5(data, pred_1, pred_2, pred_3):
-    """
-    Plots Figure 5.
-    """
-    plt.figure(figsize=(8, 5))
-    plt.xlim(-1.5, 1.5)
-    plt.ylim(0, 1)
-    plt.axvline(x=0, color="r")
-    plt.xlabel("First year GPA minus probation cutoff")
-    plt.ylabel("Has Graduated")
-
-    plt.plot(
-        data.gradin4.groupby(data["dist_from_cut_med10"]).mean(),
-        "o",
-        color="k",
-        label="Within 4 years",
-    )
-    plot_RDD_curve_colored(
-        df=pred_1,
-        running_variable="dist_from_cut",
-        outcome="prediction",
-        cutoff=0,
-        color="k",
-    )
-
-    plt.plot(
-        data.gradin5.groupby(data["dist_from_cut_med10"]).mean(),
-        "x",
-        color="C0",
-        label="Within 5 years",
-    )
-    plot_RDD_curve_colored(
-        df=pred_2,
-        running_variable="dist_from_cut",
-        outcome="prediction",
-        cutoff=0,
-        color="C0",
-    )
-
-    plt.plot(
-        data.gradin6.groupby(data["dist_from_cut_med10"]).mean(),
-        "^",
-        color="g",
-        label="Within 6 years",
-    )
-    plot_RDD_curve_colored(
-        df=pred_3,
-        running_variable="dist_from_cut",
-        outcome="prediction",
-        cutoff=0,
-        color="g",
-    )
-
-    plt.legend()
-    plt.title("Figure 5 - Graduation Rates")
-
-
-def plot_figure4_with_CI(data, pred):
-    """
-    Plots Figure 4 with confidence intervals.
-    """
+    # Plot GATE
     plt.figure(figsize=(8, 6))
-    plt.xlim(-1.5, 1.5)
-    plt.ylim(-0.5, 1.2)
-    plt.axvline(x=0, color="r")
-    plt.xlabel("First year GPA minus probation cutoff")
-    plt.ylabel("Subsequent GPA minus Cutoff")
-    plt.plot(data.nextGPA.groupby(data["dist_from_cut_med10"]).mean(), "o")
-    plot_RDD_curve_CI(
-        df=pred,
-        running_variable="dist_from_cut",
-        outcome="prediction",
-        cutoff=0,
-        lbound="lower_bound",
-        ubound="upper_bound",
-        CI_color="c",
-        linecolor="orange",
-    )
-
-    plt.title("GPA in the next enrolled term with CI")
+    plt.bar(x=[0, 1], height=[ate_pi_0[0], ate_pi_1[0]], yerr=[abs(ate_pi_0[2] - ate_pi_0[0]), abs(ate_pi_1[2] - ate_pi_1[0])],
+            capsize=10, color=["red", "green"], alpha=0.7)
+    plt.plot([-0.5, 1.5], [0, 0], color="black")
+    plt.xlim([-0.5, 1.5])
+    plt.xticks([0, 1], ["$\pi(x_i)=0$\n\nCML model would not treat", "$\pi(x_i)=1$\n\nCML model would treat"], fontsize=18)
+    plt.ylabel('Group ATE on returns', fontsize=18)
+    plt.tight_layout()
+    plt.savefig("plots/gate_plot.pdf")
+    plt.close()
+    print("GATE plot saved as plots/gate_plot.pdf")
 
 
-def plot_figure_credits_year2(data, pred):
-    plt.figure(figsize=(8, 5))
-    plt.xlim(-1.5, 1.5)
-    plt.ylim(2.5, 5)
-    plt.axvline(x=0, color="r")
-    plt.xlabel("First year GPA minus probation cutoff")
-    plt.ylabel("Total credits in year 2")
-    plt.plot(data.total_credits_year2.groupby(data["dist_from_cut_med10"]).mean(), "o")
-    plot_RDD_curve(
-        df=pred, running_variable="dist_from_cut", outcome="prediction", cutoff=0
-    )
-    plt.title("Total credits in Second Year")
+def get_ipw_mean_w_se(dataset, prediction, y, q, asc):
+    """
+    Calculates the Inverse Propensity Weighted (IPW) estimate with standard errors
+    relative to the random baseline, see Athey et al. (2023), arXiv:2310.08672.
+
+    Parameters:
+    dataset (pd.DataFrame): DataFrame containing the data.
+    prediction (str): Column name for the prediction values.
+    y (str): Column name for the outcome variable.
+    q (float): Quantile for cutting the dataset (share treated).
+    asc (bool): Whether to sort the dataset in ascending order.
+
+    Returns:
+    tuple: IPW estimate, lower bound, and upper bound of the confidence interval.
+    """
+    sum_t, data_n = sum(dataset.t), len(dataset)
+    prop_score = sum_t / data_n
+    dataset["f0"], dataset["f1"] = dataset[dataset.t == 0][y].mean(), dataset[dataset.t == 1][y].mean()
+
+    # Sort data
+    ordered_df = dataset.sort_values(prediction, ascending=asc).reset_index(drop=True).copy()
+
+    # Get pi, ft
+    cutoff = int(q * len(ordered_df))
+    ordered_df["pi"] = 0
+    ordered_df.iloc[:cutoff, ordered_df.columns.get_loc("pi")] = 1
+    ordered_df["ft"] = np.where(ordered_df.t == 0, ordered_df["f0"], ordered_df["f1"])
+
+    # Get IPW estimate
+    policy_treat_nr = round(len(ordered_df) * q)
+    treat_data = ordered_df.iloc[:policy_treat_nr, :]
+    notrt_data = ordered_df.iloc[policy_treat_nr:, :]
+    ipw_est_summand_1 = np.sum(treat_data[treat_data.t == 1][y]) / sum_t
+    ipw_est_summand_2 = np.sum(notrt_data[notrt_data.t == 0][y]) / (data_n - sum_t)
+    ipw_est_sum = ipw_est_summand_1 + ipw_est_summand_2
+
+    # Get tau_hat_aipw
+    tau_hat_aipw = ordered_df.prediction + (
+            ((ordered_df.t - prop_score) / (prop_score * (1 - prop_score))) * (ordered_df[y] - ordered_df.ft))
+
+    # Get delta_hat
+    delta_hat = (1 / data_n) * np.sum((ordered_df.pi - q) * tau_hat_aipw)
+
+    # Get standard errors
+    se_hat = np.sqrt((1 / (data_n ** 2)) * np.sum(((ordered_df.pi - q) * tau_hat_aipw - delta_hat) ** 2))
+    return ipw_est_sum, ipw_est_sum - 1.96 * se_hat, ipw_est_sum + 1.96 * se_hat
 
 
-def plot_left_school_all(data, pred):
-    plt.xlim(-1.5, 1.5)
-    plt.ylim(0, 0.22)
-    plt.axvline(x=0, color="r")
-    plt.xlabel("First year GPA minus probation cutoff")
-    plt.ylabel("Left university voluntarily")
+def cumulative_gain_ipw(dataset, prediction, y, asc=False):
+    """
+    Calculates cumulative gain using the IPW estimator.
 
-    bin_means = data.left_school.groupby(data["dist_from_cut_med10"]).mean()
-    bin_means = pd.Series.to_frame(bin_means)
-    plt.plot(list(bin_means.index), list(bin_means.left_school), "o")
+    Parameters:
+    dataset (pd.DataFrame): DataFrame containing the data.
+    prediction (str): Column name for the predicted effects.
+    y (str): Column name for the outcome variable.
+    asc (bool): Whether to sort the dataset in ascending order.
 
-    plot_RDD_curve(
-        df=pred, running_variable="dist_from_cut", outcome="prediction", cutoff=0
-    )
-    plt.title("Left university voluntarily")
+    Returns:
+    np.ndarray: Array containing the IPW estimates and their confidence intervals.
+    """
+    ipw_estimate_ci = np.zeros((101, 3))
+
+    for q_100 in range(0, 101):
+        q = q_100 / 100
+        ipw_estimate_ci[q_100][0], ipw_estimate_ci[q_100][1], ipw_estimate_ci[q_100][2] = \
+            get_ipw_mean_w_se(dataset, prediction, y, q, asc)
+
+    return ipw_estimate_ci
 
 
-def plot_nextCGPA(data, pred):
-    plt.figure(figsize=(8, 5))
-    plt.xlim(-1.5, 1.5)
-    plt.ylim(-1, 1.5)
-    plt.axvline(x=0, color="r")
-    plt.xlabel("First year GPA minus probation cutoff")
-    plt.ylabel("Subsequent CGPA minus cutoff")
-    plt.plot(data.nextCGPA.groupby(data["dist_from_cut_med10"]).mean(), "o")
-    plot_RDD_curve(
-        df=pred, running_variable="dist_from_cut", outcome="prediction", cutoff=0
-    )
-    plt.title("CGPA in the next enrolled term")
+def plot_cum_gain_ipw(x_test, y_test, t_test, est, asc=False):
+    """
+    Plots the cumulative gain using the IPW estimator.
+
+    Parameters:
+    x_test (pd.DataFrame): DataFrame containing the test predictors.
+    y_test (pd.Series): Series containing the test outcomes.
+    t_test (pd.Series): Series containing the test treatments.
+    est (CausalForestDML): Trained Causal Forest DML model.
+    asc (bool): Whether to sort the dataset in ascending order.
+
+    Returns:
+    None: Saves the plot as a PDF file.
+    """
+    plt.style.use(["grid", "science"])
+    plt.figure(figsize=(8, 4.8))
+
+    # Get predictions and prepare DataFrame
+    nudge_pred = pd.DataFrame({"t": t_test, "y": y_test, "prediction": est.effect_inference(x_test).summary_frame().point_estimate.values})
+
+    # Calculate cumulative gain
+    cum_gain = cumulative_gain_ipw(nudge_pred, "prediction", "y", asc=asc)
+
+    # Plot baseline and zero line
+    plt.plot([0, 1], [cum_gain[0][0], cum_gain[100][0]], color="black", linestyle="--", label="Random Baseline")
+
+    # Plot cumulative gain curve
+    x = np.array(range(0, 101))
+    plt.fill_between(x / 100, [share[1] for share in cum_gain], [share[2] for share in cum_gain], color="green", alpha=0.2)
+    plt.plot(x / 100, [share[0] for share in cum_gain], color="green", alpha=1, label="Causal Forest")
+
+    plt.xlabel("Share of customers treated")
+    plt.ylabel("Mean returns (IPS estimator)")
+    plt.xlim(0, 1)
+    plt.legend()
+    plt.savefig("plots/ips_plot.pdf")
+    plt.close()
+    print("IPS estimator plot saved as plots/ips_plot.pdf")
+
+
+if __name__ == "__main__":
+    # Call the evaluate_model function when the script is executed directly
+    evaluate_model()
