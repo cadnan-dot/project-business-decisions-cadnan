@@ -181,6 +181,36 @@ def plot_cum_gain_ipw(x_test, y_test, t_test, est, asc=False):
     print("IPS estimator plot saved as plots/ips_plot.pdf")
 
 
+def evaluate_model(test_data_path='data/test_data.csv', model_path='model/causal_forest_dml_model.pkl'):
+    """
+    Evaluates the trained Causal Forest DML model on the test data,
+    and (i) plots both Group Average Treatment Effects (GATE)
+    and (ii) the inverse propensity score estimator
+    for different shares of treated individuals.
+
+    Parameters:
+    test_data_path (str): Path to the CSV file containing the test data.
+    model_path (str): Path to the file containing the trained model.
+
+    Returns:
+    None: Saves the plots as .pdf in the folder "plots"
+    """
+    # Load the test dataset from the specified path
+    test_df = pd.read_csv(test_data_path)
+
+    # Split the data into predictors (X), treatment (T), and outcome (Y)
+    y_test, t_test, x_test = test_df["Y"], test_df["T"], test_df.drop(columns=["T", "Y"])
+
+    # Load the trained model from the specified path
+    est = joblib.load(model_path)
+
+    # (i) Group Average Treatment Effect (GATE) plot
+    plot_gate(est, x_test, y_test, t_test)
+
+    # (ii) IPS estimator plot for 0 - 1 shares treated
+    plot_cum_gain_ipw(x_test, y_test, t_test, est, asc=True)
+
+
 if __name__ == "__main__":
     # Call the evaluate_model function when the script is executed directly
     evaluate_model()
