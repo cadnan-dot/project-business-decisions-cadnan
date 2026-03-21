@@ -21,6 +21,8 @@ jobs:
         with:
           environment-file: environment.yml
           generate-run-shell: true
+          init-shell: bash
+          log-level: debug
 
       - name: Create required directories
         shell: micromamba-shell {0}
