@@ -4,7 +4,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import joblib
-import scienceplots
+import scienceplots  # noqa: F401
 
 
 
