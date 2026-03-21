@@ -6,9 +6,6 @@ on:
     branches: [main]
   workflow_dispatch:
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   run-notebook:
     runs-on: ubuntu-latest
@@ -16,32 +13,29 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Micromamba
-        uses: mamba-org/setup-micromamba@v1
+      - name: Setup Conda
+        uses: conda-incubator/setup-miniconda@v3
         with:
           environment-file: environment.yml
-          generate-run-shell: true
-          init-shell: bash
-          log-level: debug
+          activate-environment: mksc
+          auto-activate-base: false
 
       - name: Create required directories
-        shell: micromamba-shell {0}
-        run: |
-          mkdir -p plots model
+        shell: bash -el {0}
+        run: mkdir -p plots model
 
       - name: Apply econml Python 3.11 patch
-        shell: micromamba-shell {0}
+        shell: bash -el {0}
         run: |
           UTILS=$(python -c "import econml; import os; print(os.path.join(os.path.dirname(econml.__file__), 'utilities.py'))")
           sed -i 's/from pkg_resources import parse_version/from packaging.version import Version as parse_version/' "$UTILS"
 
       - name: Lint with ruff
-        shell: micromamba-shell {0}
+        shell: bash -el {0}
         run: |
           ruff check .
           ruff format --check .
 
       - name: Run notebook
-        shell: micromamba-shell {0}
-        run: |
-          pytest --nbmake replication.ipynb
+        shell: bash -el {0}
+        run: pytest --nbmake replication.ipynb
