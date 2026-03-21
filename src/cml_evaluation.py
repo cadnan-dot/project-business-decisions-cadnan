@@ -1,11 +1,11 @@
 import numpy as np
 import pandas as pd
 import matplotlib
-matplotlib.use('Agg')
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import joblib
 import scienceplots  # noqa: F401
-
 
 
 def get_ate_w_ci(foc_data, y, t, z=1.96):
@@ -21,15 +21,16 @@ def get_ate_w_ci(foc_data, y, t, z=1.96):
     Returns:
     tuple: Coefficient, standard error, and confidence interval lower and upper bounds.
     """
-    t_coeff = (np.sum((foc_data[t] - foc_data[t].mean()) * (foc_data[y] - foc_data[y].mean())) /
-               np.sum((foc_data[t] - foc_data[t].mean()) ** 2))
+    t_coeff = np.sum(
+        (foc_data[t] - foc_data[t].mean()) * (foc_data[y] - foc_data[y].mean())
+    ) / np.sum((foc_data[t] - foc_data[t].mean()) ** 2)
 
     n = foc_data.shape[0]
     t_bar = foc_data[t].mean()
     beta1 = t_coeff
     beta0 = foc_data[y].mean() - beta1 * t_bar
     e = foc_data[y] - (beta0 + beta1 * foc_data[t])
-    se = np.sqrt(((1 / (n - 2)) * np.sum(e ** 2)) / np.sum((foc_data[t] - t_bar) ** 2))
+    se = np.sqrt(((1 / (n - 2)) * np.sum(e**2)) / np.sum((foc_data[t] - t_bar) ** 2))
     t_ci = np.array([beta1 - z * se, beta1 + z * se])
 
     return t_coeff, se, t_ci[0], t_ci[1]
@@ -49,32 +50,48 @@ def plot_gate(est, x_test, y_test, t_test):
     None: Saves the GATE plot as a PDF file.
     """
     effects = est.effect_inference(x_test).summary_frame()
-    testing_frame = pd.DataFrame({'y': y_test, 't': t_test})
-    testing_frame['effect'] = effects['point_estimate']
-    testing_frame['treat_policy'] = np.where(testing_frame['effect'] < 0, 1, 0)
-    print(np.sum(testing_frame['treat_policy']))
+    testing_frame = pd.DataFrame({"y": y_test, "t": t_test})
+    testing_frame["effect"] = effects["point_estimate"]
+    testing_frame["treat_policy"] = np.where(testing_frame["effect"] < 0, 1, 0)
+    print(np.sum(testing_frame["treat_policy"]))
     print(np.sum(len(testing_frame)))
 
     # Calculate ATE with confidence intervals for groups
-    ate_pi_1 = get_ate_w_ci(testing_frame[testing_frame.treat_policy == 1], y="y", t="t")
-    ate_pi_0 = get_ate_w_ci(testing_frame[testing_frame.treat_policy == 0], y="y", t="t")
+    ate_pi_1 = get_ate_w_ci(
+        testing_frame[testing_frame.treat_policy == 1], y="y", t="t"
+    )
+    ate_pi_0 = get_ate_w_ci(
+        testing_frame[testing_frame.treat_policy == 0], y="y", t="t"
+    )
     # Get number of observations in each group (Visual Enhancement)
     n_pi0 = len(testing_frame[testing_frame.treat_policy == 0])
     n_pi1 = len(testing_frame[testing_frame.treat_policy == 1])
 
-
     # Plot GATE
 
     plt.figure(figsize=(8, 6))
-    plt.bar(x=[0, 1], height=[ate_pi_0[0], ate_pi_1[0]], yerr=[abs(ate_pi_0[2] - ate_pi_0[0]), abs(ate_pi_1[2] - ate_pi_1[0])],
-            capsize=10, color=["red", "green"], alpha=0.7)
+    plt.bar(
+        x=[0, 1],
+        height=[ate_pi_0[0], ate_pi_1[0]],
+        yerr=[abs(ate_pi_0[2] - ate_pi_0[0]), abs(ate_pi_1[2] - ate_pi_1[0])],
+        capsize=10,
+        color=["red", "green"],
+        alpha=0.7,
+    )
     plt.plot([-0.5, 1.5], [0, 0], color="black")
     plt.xlim([-0.5, 1.5])
-    plt.xticks([0, 1], ["$\pi(x_i)=0$\n\nCML model would not treat", "$\pi(x_i)=1$\n\nCML model would treat"], fontsize=18)
-    plt.ylabel('Group ATE on returns', fontsize=18)
+    plt.xticks(
+        [0, 1],
+        [
+            "$\pi(x_i)=0$\n\nCML model would not treat",
+            "$\pi(x_i)=1$\n\nCML model would treat",
+        ],
+        fontsize=18,
+    )
+    plt.ylabel("Group ATE on returns", fontsize=18)
     # Add number of observations in each group as text annotations (Visual Enhancement)
-    plt.text(-0.15, 0.038, f'n={n_pi0:,}', ha='center', fontsize=14)
-    plt.text(1.15, 0.038, f'n={n_pi1:,}', ha='center', fontsize=14)
+    plt.text(-0.15, 0.038, f"n={n_pi0:,}", ha="center", fontsize=14)
+    plt.text(1.15, 0.038, f"n={n_pi1:,}", ha="center", fontsize=14)
     plt.tight_layout()
     plt.savefig("plots/gate_plot_produced.pdf")
     plt.close()
@@ -98,10 +115,15 @@ def get_ipw_mean_w_se(dataset, prediction, y, q, asc):
     """
     sum_t, data_n = sum(dataset.t), len(dataset)
     prop_score = sum_t / data_n
-    dataset["f0"], dataset["f1"] = dataset[dataset.t == 0][y].mean(), dataset[dataset.t == 1][y].mean()
+    dataset["f0"], dataset["f1"] = (
+        dataset[dataset.t == 0][y].mean(),
+        dataset[dataset.t == 1][y].mean(),
+    )
 
     # Sort data
-    ordered_df = dataset.sort_values(prediction, ascending=asc).reset_index(drop=True).copy()
+    ordered_df = (
+        dataset.sort_values(prediction, ascending=asc).reset_index(drop=True).copy()
+    )
 
     # Get pi, ft
     cutoff = int(q * len(ordered_df))
@@ -119,13 +141,18 @@ def get_ipw_mean_w_se(dataset, prediction, y, q, asc):
 
     # Get tau_hat_aipw
     tau_hat_aipw = ordered_df.prediction + (
-            ((ordered_df.t - prop_score) / (prop_score * (1 - prop_score))) * (ordered_df[y] - ordered_df.ft))
+        ((ordered_df.t - prop_score) / (prop_score * (1 - prop_score)))
+        * (ordered_df[y] - ordered_df.ft)
+    )
 
     # Get delta_hat
     delta_hat = (1 / data_n) * np.sum((ordered_df.pi - q) * tau_hat_aipw)
 
     # Get standard errors
-    se_hat = np.sqrt((1 / (data_n ** 2)) * np.sum(((ordered_df.pi - q) * tau_hat_aipw - delta_hat) ** 2))
+    se_hat = np.sqrt(
+        (1 / (data_n**2))
+        * np.sum(((ordered_df.pi - q) * tau_hat_aipw - delta_hat) ** 2)
+    )
     return ipw_est_sum, ipw_est_sum - 1.96 * se_hat, ipw_est_sum + 1.96 * se_hat
 
 
@@ -146,8 +173,11 @@ def cumulative_gain_ipw(dataset, prediction, y, asc=False):
 
     for q_100 in range(0, 101):
         q = q_100 / 100
-        ipw_estimate_ci[q_100][0], ipw_estimate_ci[q_100][1], ipw_estimate_ci[q_100][2] = \
-            get_ipw_mean_w_se(dataset, prediction, y, q, asc)
+        (
+            ipw_estimate_ci[q_100][0],
+            ipw_estimate_ci[q_100][1],
+            ipw_estimate_ci[q_100][2],
+        ) = get_ipw_mean_w_se(dataset, prediction, y, q, asc)
 
     return ipw_estimate_ci
 
@@ -167,22 +197,48 @@ def plot_cum_gain_ipw(x_test, y_test, t_test, est, asc=False):
     None: Saves the plot as a PDF file.
     """
     plt.style.use(["science", "grid"])
-    plt.rcParams['text.usetex'] = False
+    plt.rcParams["text.usetex"] = False
     plt.figure(figsize=(8, 4.8))
 
     # Get predictions and prepare DataFrame
-    nudge_pred = pd.DataFrame({"t": t_test, "y": y_test, "prediction": est.effect_inference(x_test).summary_frame().point_estimate.values})
+    nudge_pred = pd.DataFrame(
+        {
+            "t": t_test,
+            "y": y_test,
+            "prediction": est.effect_inference(x_test)
+            .summary_frame()
+            .point_estimate.values,
+        }
+    )
 
     # Calculate cumulative gain
     cum_gain = cumulative_gain_ipw(nudge_pred, "prediction", "y", asc=asc)
 
     # Plot baseline and zero line
-    plt.plot([0, 1], [cum_gain[0][0], cum_gain[100][0]], color="black", linestyle="--", label="Random Baseline")
+    plt.plot(
+        [0, 1],
+        [cum_gain[0][0], cum_gain[100][0]],
+        color="black",
+        linestyle="--",
+        label="Random Baseline",
+    )
 
     # Plot cumulative gain curve
     x = np.array(range(0, 101))
-    plt.fill_between(x / 100, [share[1] for share in cum_gain], [share[2] for share in cum_gain], color="green", alpha=0.2)
-    plt.plot(x / 100, [share[0] for share in cum_gain], color="green", alpha=1, label="Causal Forest")
+    plt.fill_between(
+        x / 100,
+        [share[1] for share in cum_gain],
+        [share[2] for share in cum_gain],
+        color="green",
+        alpha=0.2,
+    )
+    plt.plot(
+        x / 100,
+        [share[0] for share in cum_gain],
+        color="green",
+        alpha=1,
+        label="Causal Forest",
+    )
 
     plt.xlabel("Share of customers treated")
     plt.ylabel("Mean returns (IPS estimator)")
@@ -193,7 +249,9 @@ def plot_cum_gain_ipw(x_test, y_test, t_test, est, asc=False):
     print("IPS estimator plot saved as plots/ips_plot_produced.pdf")
 
 
-def evaluate_model(test_data_path='data/test_data.csv', model_path='model/causal_forest_dml_model.pkl'):
+def evaluate_model(
+    test_data_path="data/test_data.csv", model_path="model/causal_forest_dml_model.pkl"
+):
     """
     Evaluates the trained Causal Forest DML model on the test data,
     and (i) plots both Group Average Treatment Effects (GATE)
@@ -211,7 +269,11 @@ def evaluate_model(test_data_path='data/test_data.csv', model_path='model/causal
     test_df = pd.read_csv(test_data_path)
 
     # Split the data into predictors (X), treatment (T), and outcome (Y)
-    y_test, t_test, x_test = test_df["Y"], test_df["T"], test_df.drop(columns=["T", "Y"])
+    y_test, t_test, x_test = (
+        test_df["Y"],
+        test_df["T"],
+        test_df.drop(columns=["T", "Y"]),
+    )
 
     # Load the trained model from the specified path
     est = joblib.load(model_path)

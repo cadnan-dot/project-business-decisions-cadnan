@@ -27,7 +27,7 @@ def simulate_data(n_samples=50_000, test_size=0.2):
 
     # Create column X5 to have a correlation of 0.3 with column X4
     noise = np.random.rand(n_samples)
-    X5 = 0.3 * X4 + np.sqrt(1 - 0.3 ** 2) * noise
+    X5 = 0.3 * X4 + np.sqrt(1 - 0.3**2) * noise
 
     # Generate binary columns X6 and X7 with a probability of 0.2 for 1
     X6 = np.random.choice([0, 1], size=n_samples, p=[0.8, 0.2])
@@ -43,11 +43,13 @@ def simulate_data(n_samples=50_000, test_size=0.2):
     # effectively creating treatment heterogeneities
     for i in range(n_samples):
         if T[i] == 1:
-            prob_Y = 0.30 \
-                     - 0.04 * (X1[i] + X2[i]) \
-                     + 0.16 * (X3[i] * X4[i]) \
-                     - 0.02 * X5[i] \
-                     + 0.02 * X6[i]
+            prob_Y = (
+                0.30
+                - 0.04 * (X1[i] + X2[i])
+                + 0.16 * (X3[i] * X4[i])
+                - 0.02 * X5[i]
+                + 0.02 * X6[i]
+            )
         else:
             prob_Y = 0.30
 
@@ -58,22 +60,26 @@ def simulate_data(n_samples=50_000, test_size=0.2):
         Y[i] = np.random.choice([0, 1], p=[1 - prob_Y, prob_Y])
 
     # Create a DataFrame
-    df = pd.DataFrame({
-        'X1': X1,
-        'X2': X2,
-        'X3': X3,
-        'X4': X4,
-        'X5': X5,
-        'X6': X6,
-        'X7': X7,
-        'T': T,
-        'Y': Y
-    })
+    df = pd.DataFrame(
+        {
+            "X1": X1,
+            "X2": X2,
+            "X3": X3,
+            "X4": X4,
+            "X5": X5,
+            "X6": X6,
+            "X7": X7,
+            "T": T,
+            "Y": Y,
+        }
+    )
 
     train_df, test_df = train_test_split(df, test_size=test_size, random_state=rs)
-    train_df.to_csv('data/train_data.csv', index=False)
-    test_df.to_csv('data/test_data.csv', index=False)
-    print("Data simulation complete. Files saved to data/processed/train_data.csv and data/processed/test_data.csv")
+    train_df.to_csv("data/train_data.csv", index=False)
+    test_df.to_csv("data/test_data.csv", index=False)
+    print(
+        "Data simulation complete. Files saved to data/processed/train_data.csv and data/processed/test_data.csv"
+    )
 
 
 if __name__ == "__main__":
