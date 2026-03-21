@@ -18,7 +18,7 @@ jobs:
       - name: Setup Micromamba
         uses: mamba-org/setup-micromamba@v2
         with:
-          environment-file: environment.yaml
+          environment-file: environment.yml
 
       - name: Create required directories
         shell: micromamba-shell {0}
