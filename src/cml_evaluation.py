@@ -93,9 +93,9 @@ def plot_gate(est, x_test, y_test, t_test):
     plt.text(-0.15, 0.038, f"n={n_pi0:,}", ha="center", fontsize=14)
     plt.text(1.15, 0.038, f"n={n_pi1:,}", ha="center", fontsize=14)
     plt.tight_layout()
-    plt.savefig("plots/gate_plot_produced.pdf")
+    plt.savefig("plots/gate_plot_produced.png")
     plt.close()
-    print("GATE plot saved as plots/gate_plot_produced.pdf")
+    print("GATE plot saved as plots/gate_plot_produced.png")
 
 
 def get_ipw_mean_w_se(dataset, prediction, y, q, asc):
@@ -244,9 +244,9 @@ def plot_cum_gain_ipw(x_test, y_test, t_test, est, asc=False):
     plt.ylabel("Mean returns (IPS estimator)")
     plt.xlim(0, 1)
     plt.legend()
-    plt.savefig("plots/ips_plot_produced.pdf")
+    plt.savefig("plots/ips_plot_produced.png")
     plt.close()
-    print("IPS estimator plot saved as plots/ips_plot_produced.pdf")
+    print("IPS estimator plot saved as plots/ips_plot_produced.png")
 
 
 def evaluate_model(
